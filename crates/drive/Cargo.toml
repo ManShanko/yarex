@@ -1,0 +1,29 @@
+[package]
+name = "drive"
+version = "0.1.0"
+authors = ["ManShanko"]
+description = """
+Storage drive helper functions.
+"""
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+resolver = "2"
+
+[target.'cfg(windows)'.dependencies.winapi]
+version = "0.3"
+features = [
+    "winioctl",
+    "oaidl",
+    "combaseapi",
+    "ioapiset",
+    "rpcdce",
+    "unknwnbase",
+    "objbase",
+    "objidl",
+    "wbemcli",
+    "wtypesbase",
+    "winbase",
+    "impl-default",
+    "std",
+]

@@ -1,0 +1,21 @@
+[package]
+name = "stingray"
+version = "0.1.0"
+authors = ["ManShanko"]
+description = """
+Library for reading the Autodesk Stingray (previously Bitsquid) bundle format.
+"""
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+resolver = "2"
+
+[features]
+default = ["serde_support"]
+
+serde_support = ["serde"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"], optional = true }
+flate2 = "1.0"
+

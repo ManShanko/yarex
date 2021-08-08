@@ -1,0 +1,45 @@
+[package]
+name = "yarex"
+version = "0.1.0"
+authors = ["ManShanko"]
+license = "MIT"
+edition = "2018"
+resolver = "2"
+
+[features]
+default = ["serde_support"]
+
+serde_support = ["serde", "bincode"]
+
+[[bin]]
+path = "crates/core/main.rs"
+name = "yarex"
+
+[workspace]
+members = [
+    "crates/steam",
+    "crates/drive",
+    "crates/stingray",
+]
+
+[dependencies]
+drive = { path = "crates/drive" }
+steam = { path = "crates/steam" }
+stingray = { path = "crates/stingray" }
+pico-args = { version = "0.4.2", default-features = false }
+num_cpus = "1.13.0"
+crossbeam-utils = { version = "0.8.5", features = ["std"], default-features = false }
+bincode = { version = "1.3.3", optional = true }
+serde = { version = "1.0.127", features = ["derive"], optional = true }
+
+[target.'cfg(windows)'.dependencies.flate2]
+version = "1.0.20"
+features = ["zlib-ng-compat"]
+default-features = false
+
+[target.'cfg(not(windows))'.dependencies.flate2]
+version = "1.0.20"
+
+
+
+

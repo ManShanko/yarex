@@ -1,0 +1,17 @@
+[package]
+name = "steam"
+version = "0.1.0"
+authors = ["ManShanko"]
+description = """
+Finds Steam or Steam applications.
+"""
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+resolver = "2"
+
+[target.'cfg(windows)'.dependencies.winapi]
+version = "0.3"
+features = [
+    "winreg",
+]
