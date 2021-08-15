@@ -166,6 +166,7 @@ impl Reader {
                                 let lazy = LazyFile::new(&path, unbuffered);
 
                                 {
+                                    #[cfg(target_os = "windows")]
                                     if self.is_ssd.load(Ordering::SeqCst) {
                                         let mut files = self.files.lock().unwrap();
                                         files.push((lazy, None, *bundle_hash, *patch));
@@ -180,6 +181,12 @@ impl Reader {
                                                 Ok(i) => files.insert(i, (lazy, offset, *bundle_hash, *patch)),
                                             }
                                         }
+                                    }
+
+                                    #[cfg(not(target_os = "windows"))]
+                                    {
+                                        let mut files = self.files.lock().unwrap();
+                                        files.push((lazy, None, *bundle_hash, *patch));
                                     }
                                     self.ready.notify_one();
                                 }
