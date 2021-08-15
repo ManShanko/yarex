@@ -1,6 +1,6 @@
 [package]
 name = "steam"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["ManShanko"]
 description = """
 Finds Steam or Steam applications.

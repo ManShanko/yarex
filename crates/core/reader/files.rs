@@ -59,6 +59,10 @@ impl Reader {
         }
     }
 
+    pub fn is_ssd(&self) -> bool {
+        self.is_ssd.load(Ordering::SeqCst)
+    }
+
     pub fn num_files(&self) -> u64 {
         *self.has_num.wait_while(self.num_files.lock().unwrap(), |num_files| *num_files == u64::MAX).unwrap()
     }

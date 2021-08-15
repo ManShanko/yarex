@@ -17,14 +17,13 @@ const KIBYTE: u64 = 1024;
 const MIBYTE: u64 = KIBYTE * 1024;
 const GIBYTE: u64 = MIBYTE * 1024;
 
-// doesn't round up
 pub fn size_to_string(num: u64) -> String {
-    if num < MIBYTE {
-        format!("{}.{:02} KiB", num / KIBYTE, (num % KIBYTE) / (KIBYTE / 100))
-    } else if num < GIBYTE {
-        format!("{}.{:02} MiB", num / MIBYTE, (num % MIBYTE) / (MIBYTE / 100))
+    if num < KIBYTE*1000 {
+        format!("{}.{:02} KiB", num / KIBYTE, ((num % KIBYTE) * 100) / KIBYTE)
+    } else if num < MIBYTE*1000 {
+        format!("{}.{:02} MiB", num / MIBYTE, ((num % MIBYTE) * 100) / MIBYTE)
     } else {
-        format!("{}.{:02} GiB", num / GIBYTE, (num % GIBYTE) / (GIBYTE / 100))
+        format!("{}.{:02} GiB", num / GIBYTE, ((num % GIBYTE) * 100) / GIBYTE)
     }
 }
 

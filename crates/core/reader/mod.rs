@@ -273,6 +273,8 @@ impl Index {
             }
         }).unwrap();
 
+        self.is_ssd = reader.is_ssd();
+
         Ok(())
     }
 
@@ -321,11 +323,15 @@ impl Index {
         &mut self,
         out_dir: Option<&Path>,
         pattern: &str,
-        num_threads: usize,
+        mut num_threads: usize,
         unbuffered: bool,
         hash_fallback: bool,
         send: Option<mpsc::Sender<IndexEvent>>
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if !self.is_ssd {
+            num_threads = 1;
+        }
+
         let mut split: Vec<&str> = pattern.split('.').collect();
 
         // assume wildcard if no extension is passed
@@ -365,7 +371,7 @@ impl Index {
             }
         };
 
-        let mut total_files = 0;
+        let mut num_files = 0;
         let mut set = HashSet::new();
         let mut bundles = Vec::<(u64, &mut BundleVersion, Vec<(u64, u64)>)>::new();
         for bundle in &mut self.bundles {
@@ -379,6 +385,12 @@ impl Index {
 
                 if !set.contains(&key) {
                     set.insert(key);
+                    if hash_fallback || can_file_self_name(file.ext_hash()) {
+                        num_files += 1;
+                    } else if let Some(_) = self.key_map.get_key(file.name_hash()) {
+                        num_files += 1;
+                    }
+
                     match group.binary_search_by(|(version_patch, ..)| version_patch.cmp(&patch)) {
                         Ok(i) => group.get_mut(i).unwrap().1.push(key),
                         Err(i) => group.insert(i, (patch, vec![key])),
@@ -390,7 +402,6 @@ impl Index {
                 for (patch, files) in group {
                     let patch = Patch::from(patch);
 
-                    total_files += files.len();
                     if let Ok(i) = versions.binary_search_by(|probe| probe.patch().cmp(&patch)) {
                         let version = versions.remove(i);
                         bundles.push((hash, version, files));
@@ -545,7 +556,7 @@ impl Index {
             }
 
             if let Some(ref send) = send {
-                send.send(IndexEvent::Size(total_files as u32)).unwrap();
+                send.send(IndexEvent::Size(num_files as u32)).unwrap();
             }
 
             for thread in threads {
@@ -697,6 +708,7 @@ fn load_bar(rx: mpsc::Receiver<IndexEvent>) -> io::Result<(u64, u64, u64)> {
 
     let mut record = std::collections::VecDeque::with_capacity(50);
     let mut last = 0;
+    let mut last_time = 0;
     loop {
         let mut is_done = false;
         let started = start.elapsed().as_millis();
@@ -724,18 +736,27 @@ fn load_bar(rx: mpsc::Receiver<IndexEvent>) -> io::Result<(u64, u64, u64)> {
             total_count as f64 / total_size as f64
         } else { 0. };
 
-        let newest = start.elapsed().as_millis();
-        record.push_front((total_read - last, newest));
+        if record.is_empty() {
+            last = total_read;
+            last_time = start.elapsed().as_millis();
+            record.push_back((last, last_time));
+        } else {
+            record.push_back((total_read - last, start.elapsed().as_millis() - last_time));
+            last = total_read;
+            last_time = start.elapsed().as_millis();
+        };
+
         if record.len() > 200 {
-            record.pop_back();
+            record.pop_front();
         }
-        let (_, oldest) = record.back().unwrap();
-        let diff = (newest - oldest) as u64 + 1;
-        let mut per_second = 0;
-        for (bytes, _) in &record {
-            per_second += bytes;
+
+        let mut bytes = 0;
+        let mut time = 1;
+        for (b, t) in &record {
+            bytes += b;
+            time += t;
         }
-        per_second = per_second * 1000 / diff;
+        let per_second = (bytes * 1000) / time as u64;
 
         progress_str.clear();
         write!(progress_str,
@@ -758,7 +779,6 @@ fn load_bar(rx: mpsc::Receiver<IndexEvent>) -> io::Result<(u64, u64, u64)> {
         }
 
         old_str_len = progress_str.len();
-        last = total_read;
         thread::sleep(Duration::from_millis(5));
 
         if is_done {
