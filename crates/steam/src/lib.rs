@@ -34,7 +34,7 @@ pub fn get_steam_dir() -> io::Result<PathBuf> {
     let mut buffer: [u16; BUFFER_SIZE] = [0; BUFFER_SIZE];
     let mut size = size_of::<[u16; BUFFER_SIZE]>().try_into().unwrap();
     let mut kind = 0;
-    unsafe {
+    let path = match unsafe {
         if RegGetValueW(
             HKEY_CURRENT_USER,
             OsString::from("SOFTWARE\\Valve\\Steam\0").encode_wide().collect::<Vec<_>>().as_ptr() as *const _,
@@ -43,14 +43,19 @@ pub fn get_steam_dir() -> io::Result<PathBuf> {
             &mut kind,
             buffer.as_mut_ptr() as *mut _,
             &mut size,
-        ) != 0 {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "steam was not found"));
-        }
-    }
+        ) == 0 {
+            let len = (size as usize - 1) / 2;
+            let path = PathBuf::from(OsString::from_wide(&buffer[..len]));
 
-    // ignore null at end of string
-    let len = (size as usize - 1) / 2;
-    let path = PathBuf::from(OsString::from_wide(&buffer[..len]));
+            if path.exists() {
+                Some(path)
+            } else { None }
+        } else { None }
+    } {
+        Some(path) => path,
+        None => return Err(io::Error::new(io::ErrorKind::NotFound, "steam was not found")),
+    };
+
     Ok(path)
 }
 
