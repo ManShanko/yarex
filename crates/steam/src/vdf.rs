@@ -56,7 +56,7 @@ pub fn get_library_folders(s: &str) -> Result<LibraryFolders, &'static str> {
     let mut lf = LibraryFolders {
         folders: Vec::<PathBuf>::new(),
     };
-    match obj.get("LibraryFolders") {
+    match obj.get("LibraryFolders").or_else(|| obj.get("libraryfolders")) {
         Some(ValueKind::Object(t)) => {
             for entry in t {
                 let field = entry.0;
