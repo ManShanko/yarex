@@ -63,8 +63,8 @@ impl Bundle {
         out.into_iter().filter(|file| file.size() > 0).collect()
     }
 
-    pub fn active_files(&self) -> Vec<(u16, &BundleFile)> {
-        let mut out = Vec::<(u16, &BundleFile)>::new();
+    pub fn active_files(&self) -> Vec<(Patch, &BundleFile)> {
+        let mut out = Vec::<(Patch, &BundleFile)>::new();
         for bundle in self.versions.iter().rev() {
             for file in &bundle.files {
                 if let Err(i) = out.binary_search_by(|(_, probe)| {
@@ -91,7 +91,7 @@ impl Bundle {
 #[cfg_attr(feature = "serde_support", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct BundleVersion {
-    patch: u16,
+    patch: Patch,
 
     /// Difference in known size of files and actual size of files.
     diff: u32,
@@ -104,8 +104,10 @@ pub struct BundleVersion {
 }
 
 impl BundleVersion {
-    pub fn new(patch: u16, size: u64) -> Self {
-        assert!(patch < 1000);
+    pub fn new(patch: Patch, size: u64) -> Self {
+        if let Some(patch) = patch.get() {
+            assert!(patch < 1000);
+        }
         assert!(size <= u32::MAX as u64);
 
         Self {
@@ -122,7 +124,7 @@ impl BundleVersion {
     }
 
     pub fn patch(&self) -> Patch {
-        Patch::from(self.patch)
+        self.patch
     }
 
     /// Get reference to `BundleReader` to enable optimizations for SSD/unbuffered IO.

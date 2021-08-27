@@ -7,6 +7,7 @@ use std::fs;
 
 use flate2::read::{ZlibEncoder, ZlibDecoder};
 use stingray::file::FileKind;
+use stingray::Patch;
 
 use super::Index;
 
@@ -27,10 +28,10 @@ pub fn size_to_string(num: u64) -> String {
     }
 }
 
-pub fn format_bundle(hash: u64, patch: u16) -> String {
-    match patch {
-        0 => format!("{:016x}", hash),
-        x => format!("{:016x}.patch_{:<03}", hash, x),
+pub fn format_bundle(hash: u64, patch: Patch) -> String {
+    match patch.get() {
+        None => format!("{:016x}", hash),
+        Some(x) => format!("{:016x}.patch_{:<03}", hash, x),
     }
 }
 

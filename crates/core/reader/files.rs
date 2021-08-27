@@ -5,20 +5,20 @@ use std::fs::read_dir;
 use std::path::Path;
 
 use crossbeam_utils::thread::Scope;
+use stingray::Patch;
 use stingray::get_bundle_hash_patch;
 
 use crate::utility::format_bundle;
 
-pub fn scan_dir_filter<P>(dir: &Path, mut filter: P) -> Vec<(u64, u16)>
+pub fn scan_dir_filter<P>(dir: &Path, mut filter: P) -> Vec<(u64, Patch)>
     where
-        P: FnMut(&(u64, u16, Metadata)) -> bool,// + std::marker::Send,
+        P: FnMut(&(u64, Patch, Metadata)) -> bool,
 {
-    let mut bundles = Vec::<(u64, u16)>::new();
+    let mut bundles = Vec::<(u64, Patch)>::new();
     if let Ok(dir) = read_dir(dir) {
         for entry in dir.flatten() {
             if let Some(s) = entry.path().to_str() {
                 if let Some((hash, patch)) = get_bundle_hash_patch(s) {
-                    let patch = patch.get().unwrap_or(0);
                     let metadata = entry
                         .metadata().unwrap();
 
@@ -33,7 +33,7 @@ pub fn scan_dir_filter<P>(dir: &Path, mut filter: P) -> Vec<(u64, u16)>
 }
 
 pub struct Reader {
-    files: Mutex<Vec<(LazyFile, Option<u64>, u64, u16)>>,
+    files: Mutex<Vec<(LazyFile, Option<u64>, u64, Patch)>>,
     num_files: Mutex<u64>,
     has_num: Condvar,
 
@@ -67,19 +67,17 @@ impl Reader {
         *self.has_num.wait_while(self.num_files.lock().unwrap(), |num_files| *num_files == u64::MAX).unwrap()
     }
 
-    pub fn pop(&self) -> Option<(File, u64, u16, bool)> {
+    pub fn pop(&self) -> Option<(File, u64, Patch, bool)> {
         let is_ssd = self.is_ssd.load(Ordering::SeqCst);
         loop {
             if self.done.load(Ordering::SeqCst) {
                 let mut files = self.files.lock().unwrap();
                 break files.pop();
             } else {
-                //let mut files = self.ready.wait(self.files.lock().unwrap()).unwrap();
                 match self.ready.wait_timeout(self.files.lock().unwrap(), std::time::Duration::from_millis(2)) {
                     Err(_) => continue,
                     Ok((mut files, _)) => {
                         if files.len() == 0 {
-                            //eprintln!("files.len() is 0 but Reader isn't done reading files");
                             continue;
                         }
 
@@ -94,13 +92,10 @@ impl Reader {
         &'a self,
         scope: &Scope<'a>,
         dir: &'a Path,
-        mut bundles: Vec<(u64, u16)>,
+        mut bundles: Vec<(u64, Patch)>,
         num_threads: usize,
         unbuffered: bool,
     ) {
-        // async adds overhead on big reads for is_ssd files
-        // since files can be captured before is_ssd is set
-        // and reads will buffer on reads from an SSD
         scope.spawn(move |_| {
             if let Some(is_ssd) = drive::in_ssd(dir) {
                 if !is_ssd && cfg!(windows) {

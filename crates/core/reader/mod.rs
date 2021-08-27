@@ -91,7 +91,7 @@ pub struct Index {
 
     bundles: Vec<Bundle>,
 
-    timestamps: HashMap<(u64, u16), u64>,
+    timestamps: HashMap<(u64, Patch), u64>,
 
     #[cfg_attr(feature = "serde_support", serde(skip))]
     dirty: bool,
@@ -152,10 +152,10 @@ impl Index {
     }
 
     pub fn get_unique_files(&self) -> Vec<&BundleFile> {
-        let mut out = HashMap::<(u64, u64, u16), &BundleFile>::with_capacity(1024*256);
+        let mut out = HashMap::<(u64, u64, Patch), &BundleFile>::with_capacity(1024*256);
         for bundle in &self.bundles {
             for version in &bundle.versions() {
-                let patch = version.patch().get().unwrap_or(0);
+                let patch = version.patch();
                 for file in version.files() {
                     out.entry((file.name_hash(), file.ext_hash(), patch)).or_insert(file);
                 }
@@ -376,7 +376,7 @@ impl Index {
         let mut bundles = Vec::<(u64, &mut BundleVersion, Vec<(u64, u64)>)>::new();
         for bundle in &mut self.bundles {
             let hash = bundle.hash();
-            let mut group: Vec<(u16, Vec<(u64, u64)>)> = Vec::new();
+            let mut group: Vec<(Patch, Vec<(u64, u64)>)> = Vec::new();
             for (patch, file) in bundle.active_files() {
                 let key = (file.ext_hash(), file.name_hash());
                 if !filter_extension(key.0) || !filter_name(key.1) {
@@ -567,7 +567,7 @@ impl Index {
         Ok(())
     }
 
-    fn find_and_check_bundles(&mut self) -> Vec<(u64, u16)> {
+    fn find_and_check_bundles(&mut self) -> Vec<(u64, Patch)> {
         let incremental = !self.bundles.is_empty();
         let dir = &self.dir;
         let timestamps = &mut self.timestamps;
@@ -588,7 +588,7 @@ impl Index {
                         match bundles.binary_search_by(|probe| probe.hash().cmp(hash)) {
                             Ok(i) => {
                                 let bundle = bundles.get_mut(i).unwrap();
-                                bundle.remove_version(Patch::new(*patch));
+                                bundle.remove_version(*patch);
                             }
                             Err(_) => panic!("no existing bundle matching parallel timestamp"),
                         }
@@ -608,7 +608,7 @@ impl Index {
                 match bundles.binary_search_by(|probe| probe.hash().cmp(&hash)) {
                     Ok(i) => {
                         let bundle = bundles.get_mut(i).unwrap();
-                        bundle.remove_version(Patch::new(patch));
+                        bundle.remove_version(patch);
                     }
                     Err(_) => panic!("no bundle matching parallel timestamp for removal"),
                 }

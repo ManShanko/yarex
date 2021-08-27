@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::fmt;
 
 /// Create bundle file name from hash and patch.
 ///
@@ -57,6 +58,7 @@ fn get_bundle_hash_patch_(path: &Path) -> Option<(u64, Patch)> {
 }
 
 /// Wrapper around patch numbers for bundles.
+#[repr(transparent)]
 #[cfg_attr(feature = "serde_support", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Patch(u16);
@@ -92,6 +94,12 @@ impl Patch {
 impl From<u16> for Patch {
     fn from(num: u16) -> Self {
         Self::new(num)
+    }
+}
+
+impl fmt::Display for Patch {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
