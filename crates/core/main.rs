@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 use std::env;
+use std::fs;
+use std::fs::File;
+use std::fs::OpenOptions;
 
 mod utility;
 use utility::{
@@ -104,10 +107,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => None,
         };
 
-        let bundle: Result<(PathBuf, PathBuf), _> = pico.value_from_str("--bundle")
-            .map(|bundle: PathBuf| (bundle.clone(), out_dir.join(bundle)))
+        let bundle: Option<(PathBuf, PathBuf)> = pico.value_from_str("--bundle")
+            .map(|bundle: PathBuf| {
+                let out = match bundle.file_name() {
+                    Some(name) => out_dir.join(name),
+                    None => out_dir.join(&bundle),
+                };
+                (bundle, out)
+            })
             .or_else(|_| pico.value_from_str("--dir-bundle")
-                .map(|bundle: PathBuf| (dir.join(&bundle), out_dir.join(bundle))));
+                .map(|bundle: PathBuf| {
+                    let out = match bundle.file_name() {
+                        Some(name) => out_dir.join(name),
+                        None => out_dir.join(&bundle),
+                    };
+                    (dir.join(bundle), out)
+                })
+            )
+            .ok();
 
         let keys: PathBuf = pico.value_from_str("--keys")
             .or_else(|_| pico.value_from_str("-k"))
@@ -121,9 +138,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let do_info        = pico.contains("--info") || pico.contains("-i");
         let no_save        = pico.contains("--no-save");
 
-        if let Ok((bundle_in, bundle_out)) = bundle {
-            if let Ok(mut fd) = std::fs::File::open(bundle_in) {
-                let mut target = std::fs::OpenOptions::new()
+        if let Some((bundle_in, bundle_out)) = bundle {
+            if let Ok(mut fd) = File::open(bundle_in) {
+                fs::create_dir_all(bundle_out.parent().unwrap()).unwrap();
+                let mut target = OpenOptions::new()
                     .write(true)
                     .truncate(true)
                     .create(true)
