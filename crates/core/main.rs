@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::env;
 
 mod utility;
 use utility::{
@@ -14,7 +15,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const PROGRAM_NAME: &str = env!("CARGO_PKG_NAME");
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = std::env::args_os().collect::<Vec<_>>();
+    let args = env::args_os().collect::<Vec<_>>();
     let num_args = args.len() - 1;
 
     // opt_value_from_fn
@@ -75,7 +76,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let out_dir: PathBuf = pico.value_from_str("--out")
             .or_else(|_| pico.value_from_str("-o"))
-            .unwrap_or_else(|_| PathBuf::from("out"));
+            .unwrap_or_else(|_|
+                match env::current_dir() {
+                    Ok(mut out) => {
+                        out.push("out");
+                        out
+                    }
+                    _ => PathBuf::from("out"),
+                });
 
         let index_file: PathBuf = pico.value_from_str("--cache")
             .or_else(|_| pico.value_from_str("-c"))
