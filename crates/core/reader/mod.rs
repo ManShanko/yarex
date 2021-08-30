@@ -501,7 +501,7 @@ impl Index {
                                                 name
                                             } else if hash_fallback {
                                                 hash_buffer.clear();
-                                                write!(hash_buffer, "{:0<16x}", *hash).unwrap();
+                                                write!(hash_buffer, "{:016x}", *hash).unwrap();
                                                 hash_buffer.as_str()
                                             } else {
                                                 continue
@@ -516,7 +516,7 @@ impl Index {
                                                 ext
                                             } else if hash_fallback {
                                                 ext_buffer.clear();
-                                                write!(ext_buffer, "{:0<16x}", *hash).unwrap();
+                                                write!(ext_buffer, "{:016x}", *hash).unwrap();
                                                 ext_buffer.as_str()
                                             } else {
                                                 continue
