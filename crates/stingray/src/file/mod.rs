@@ -10,8 +10,10 @@ use crate::hash::murmur_hash64a;
 
 #[macro_use]
 mod macros;
+mod bones;
 mod lua;
 mod texture;
+mod strings;
 mod wwise_dep;
 
 // Single use macro.
@@ -62,6 +64,24 @@ file_kinds! {
     wwise_dep,
     wwise_metadata,
     wwise_stream,
+}
+
+fn copy_and_escape_cstr(src: &[u8], out: &mut Vec<u8>) -> usize {
+    let mut size = 0;
+    while src[size] != 0 {
+        match src[size] {
+            0x08  => out.extend(b"\\b"),
+            0x0C  => out.extend(b"\\f"),
+            b'\n' => out.extend(b"\\n"),
+            b'\r' => out.extend(b"\\r"),
+            b'\t' => out.extend(b"\\t"),
+            b'"'  => out.extend(b"\\\""),
+            b'\\' => out.extend(b"\\\\"),
+            x     => out.push(x),
+        }
+        size += 1;
+    }
+    size + 1
 }
 
 // The language mapping is based on a single example (bundle ab0abf5ac607baf5)
@@ -306,6 +326,8 @@ pub fn get_file_interface<'a>(buffer: &'a [u8]) -> crate::StingrayResult<Box<dyn
         FileKind::lua => Box::new(lua::Lua::new(buffer)),
         FileKind::wwise_dep => Box::new(wwise_dep::WwiseDep::new(buffer)),
         FileKind::texture => Box::new(texture::Texture::new(buffer)),
+        FileKind::strings => Box::new(strings::Strings::new(buffer)),
+        FileKind::bones => Box::new(bones::Bones::new(buffer)),
         _ => Box::new(UnknownFile {buffer}),
     };
     Ok(r)
