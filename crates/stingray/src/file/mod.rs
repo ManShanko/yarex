@@ -14,9 +14,10 @@ mod lua;
 mod texture;
 mod wwise_dep;
 
-// convenience one use macro for generating all the code
-// currently handles mod manually in the macro since it is a reserved keyword and
-// stringify converts r#mod to "r#mod" instead of "mod"
+// Single use macro.
+//
+// Currently handles file type mod manually in the macro since it is a
+// reserved keyword and stringify converts r#mod to "r#mod" instead of "mod"
 file_kinds! {
     animation,
     animation_curves,
@@ -63,6 +64,114 @@ file_kinds! {
     wwise_stream,
 }
 
+// The language mapping is based on a single example (bundle ab0abf5ac607baf5)
+// and might be incorrect.
+#[derive(Debug, Clone, Copy)]
+pub enum Language {
+    Unknown(u32),
+    English,
+    SimplifiedChinese,
+    Polish,
+    Russian,
+    French,
+    Spanish,
+    Italian,
+    Portuguese,
+    German,
+}
+
+impl Language {
+    fn from_code(code: u32) -> Self {
+        debug_assert!(code == 0 || code.is_power_of_two());
+        match code {
+            0 => Self::English,
+            2 => Self::SimplifiedChinese,
+            4 => Self::Polish,
+            8 => Self::Russian,
+            64 => Self::French,
+            128 => Self::Spanish,
+            256 => Self::Italian,
+            512 => Self::Portuguese,
+            1024 => Self::German,
+            x => Self::Unknown(x),
+        }
+    }
+
+    fn as_str(&self) -> Option<&'static str> {
+        match *self {
+            Self::English           => Some("english"),
+            Self::SimplifiedChinese => Some("simplified_chinese"),
+            Self::Polish            => Some("polish"),
+            Self::Russian           => Some("russian"),
+            Self::French            => Some("french"),
+            Self::Spanish           => Some("spanish"),
+            Self::Italian           => Some("italian"),
+            Self::Portuguese        => Some("portuguese"),
+            Self::German            => Some("german"),
+            Self::Unknown(_)        => None,
+        }
+    }
+}
+
+pub struct FileVariant {
+    // bitflag?
+    lang: Language,
+    size: u32,
+}
+
+impl FileVariant {
+    pub fn lang(&self) -> Language {
+        self.lang
+    }
+
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+}
+
+pub struct FileInfo {
+    ext: u64,
+    hash: u64,
+    variants: Vec<FileVariant>,
+}
+
+impl FileInfo {
+    pub fn ext(&self) -> u64 {
+        self.ext
+    }
+
+    pub fn hash(&self) -> u64 {
+        self.hash
+    }
+
+    pub fn variants(&self) -> &[FileVariant] {
+        &self.variants[..]
+    }
+}
+
+pub fn get_file_info(buffer: &[u8]) -> crate::StingrayResult<(FileInfo, usize)> {
+    let ext = u64::from_le_bytes(buffer[0..8].try_into()?);
+    let hash = u64::from_le_bytes(buffer[8..16].try_into()?);
+    let num_variants = u32::from_le_bytes(buffer[16..20].try_into()?) as usize;
+    let _unknown = u32::from_le_bytes(buffer[20..24].try_into()?);
+    let mut variants = Vec::with_capacity(num_variants);
+
+    for i in 0..num_variants {
+        let n = 24 + i * 12;
+        variants.push(FileVariant {
+            lang: Language::from_code(u32::from_le_bytes(buffer[n..n + 4].try_into()?)),
+            size: u32::from_le_bytes(buffer[n + 4..n + 8].try_into()?),
+            //_unknown: u32::from_le_bytes(buffer[n + 8..n + 12].try_into()?),
+        });
+    }
+
+    Ok((FileInfo {
+        ext,
+        hash,
+        variants,
+    }, 24 + num_variants * 12))
+}
+
 /// Trait for implementing a file type processor.
 pub trait FileReader<'a> {
     fn decompile(&mut self, out: &mut dyn Write) -> crate::StingrayResult<usize>;
@@ -80,8 +189,9 @@ struct UnknownFile<'a> {
 
 impl<'a> FileReader<'a> for UnknownFile<'a> {
     fn decompile(&mut self, out: &mut dyn Write) -> crate::StingrayResult<usize> {
-        out.write_all(&self.buffer[36..])?;
-        Ok(self.buffer[36..].len())
+        let (_, offset) = get_file_info(self.buffer)?;
+        out.write_all(&self.buffer[offset..])?;
+        Ok(self.buffer[offset..].len())
     }
 }
 

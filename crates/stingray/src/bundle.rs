@@ -1,11 +1,16 @@
 use std::convert::TryInto;
-use std::io::{Read, Seek};
+use std::io::Read;
+use std::io::Seek;
+use std::cmp::Ordering;
 
 use crate::consts;
-use crate::file::{BundleFile, FileKind};
+use crate::file;
+use crate::file::BundleFile;
+use crate::file::FileKind;
 use crate::utility::Patch;
 use crate::utility::format_bundle;
-use crate::reader::{BundleReader, ReadBuffer};
+use crate::reader::BundleReader;
+use crate::reader::ReadBuffer;
 
 /// Convenience wrapper around [BundleVersion](BundleVersion).
 ///
@@ -69,7 +74,7 @@ impl Bundle {
             for file in &bundle.files {
                 if let Err(i) = out.binary_search_by(|(_, probe)| {
                     match probe.ext_hash().cmp(&file.ext_hash()) {
-                        std::cmp::Ordering::Equal => probe.name_hash().cmp(&file.name_hash()),
+                        Ordering::Equal => probe.name_hash().cmp(&file.name_hash()),
                         x => x,
                     }
                 }) {
@@ -80,7 +85,7 @@ impl Bundle {
 
         let mut out = out.into_iter().filter(|(_, file)| file.size() > 0).collect::<Vec<_>>();
         out.sort_by(|a, b| match a.0.cmp(&b.0) {
-            std::cmp::Ordering::Equal => a.1.offset().cmp(&b.1.offset()),
+            Ordering::Equal => a.1.offset().cmp(&b.1.offset()),
             x => x,
         });
         out
@@ -144,7 +149,7 @@ impl BundleVersion {
     fn get_file_index(&self, ext_hash: u64, name_hash: u64) -> Option<usize> {
         self.files.binary_search_by(|probe| {
             match probe.ext_hash().cmp(&ext_hash) {
-                std::cmp::Ordering::Equal => probe.name_hash().cmp(&name_hash),
+                Ordering::Equal => probe.name_hash().cmp(&name_hash),
                 x => x,
             }
         }).ok()
@@ -188,9 +193,6 @@ impl BundleVersion {
         let num_files = u32::from_le_bytes(scrap[0..4].try_into()?) as usize;
 
         let t: usize = num_files as usize * index_size;
-        //if t > scrap.len() {
-        //    scrap.resize(t, 0);
-        //}
         let scrap = self.reader.read(fd, buffer, 260..260 + t, Some(&mut read_raw))?;
         read += read_raw;
 
@@ -287,8 +289,8 @@ impl BundleVersion {
                     }
                 }
 
-                // invalidate size of any file between the first and last
-                // detected file
+                // invalidate size of any file between
+                // the first and last detected file
                 if let Some(start) = start {
                     if let Some(end) = end {
                         if start + 1 == end {
@@ -326,7 +328,7 @@ impl BundleVersion {
         Ok(read as u64)
     }
 
-    /// Read a file from this `BundleVersion`.
+    /// Read a file from `BundleVersion`.
     pub fn read_file<'a>(
         &mut self,
         fd: &mut (impl Read + Seek),
@@ -380,29 +382,15 @@ impl BundleVersion {
                     start += 1;
                 }
 
-                let end = if let Some(next_file) = next_file {
-                    let target = (next_file.ext_hash().to_le_bytes(), next_file.name_hash().to_le_bytes());
-                    let mut offset = size - 16;
-                    loop {
-                        if scrap[offset..offset + 8] == target.0
-                            && scrap[offset + 8..offset + 16] == target.1
-                        {
-                            break;
-                        }
-                        if offset == 0 {
-                            return Err(stingray_error!(
-                                    "underflow in bundle {} for files {:016x} {:016x} and {:016x} {:016x}",
-                                    format_bundle(bundle_hash, self.patch),
-                                    file.ext_hash().swap_bytes(),
-                                    file.name_hash().swap_bytes(),
-                                    next_file.ext_hash().swap_bytes(),
-                                    next_file.name_hash().swap_bytes()
-                                ));
-                        }
-                        offset -= 1;
+                let end = {
+                    let (info, mut end) = file::get_file_info(&scrap[start..])?;
+
+                    for variant in info.variants() {
+                        end += variant.size() as usize;
                     }
-                    offset
-                } else { size - 16 };
+
+                    start + end
+                };
 
                 file.set_offset(file.offset() + start as u32);
                 file.set_size((end - start) as u32);
